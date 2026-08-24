@@ -145,6 +145,12 @@ def show_authentication():
                 st.error(
                     f"Ошибка отправки письма: {error}"
                 )
+if st.session_state.user is None:
+    show_authentication()
+    st.stop()
+st.sidebar.write(
+    f"Вы вошли как: {st.session_state.user.email}"
+)
 
 #Настройка страницы
 st.set_page_config( #Это настройки вкладки браузера
