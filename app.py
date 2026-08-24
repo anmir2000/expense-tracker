@@ -549,7 +549,13 @@ if st.session_state.current_page == "history":
         st.session_state.current_page = "main"
         st.rerun()
 
-    st.write("Здесь позже будет календарь.")
+    selected_date=st.date_input(#selected_date =сохраняет выбранную пользователем дату в переменную.
+        #st.date_input(...)st.date_input(...)
+        "Выберите день",
+        value=date.today(),#по умолчанию выбирает сегодняшний день.
+        key="history_date"
+    )
+    st.write("Вы выбрали:",selected_date)
 
     st.stop()
 st.title("Учёт расходов")
