@@ -553,7 +553,7 @@ else:
 
 
 period_money = st.number_input(
-    "Количество денег на период",
+    "Количество средств на период",
     min_value=0.0,
     value=default_period_money,
     step=100.0,
@@ -561,7 +561,7 @@ period_money = st.number_input(
 )
 
 days = st.number_input(
-    "Количество дней",
+    "Период(кол-во дней)",
     min_value=1,
     value=default_days,
     step=1,
