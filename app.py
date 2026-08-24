@@ -46,6 +46,7 @@ session_defaults = {
     "refresh_token": None,
     "auth_error": None,
     "auth_success": None,
+    "current_page":"main",
 }
 
 for key, default_value in session_defaults.items():
@@ -409,7 +410,12 @@ if st.session_state.user_id is None:
 st.sidebar.write(
     f"Вы вошли как:\n\n{st.session_state.user_email}"
 )
-
+if st.sidebar.button(
+    "История",
+    use_container_width=True
+):
+    st.session_state.current_page="history"
+    
 if st.sidebar.button(
     "Выйти",
     use_container_width=True
@@ -427,7 +433,13 @@ if st.sidebar.button(
     clear_user_state()
     clear_auth_messages()
     st.rerun()
-
+#==========
+#Временно добавляю
+st.write(
+    "текущая страница:",
+    st.session_state.current_page
+)
+#==========
 
 # ==========================================
 # Функции работы с базой данных
