@@ -562,7 +562,13 @@ if st.session_state.current_page == "budget":
     if st.button("Вернуться на главную"):
         st.session_state.current_page="main"
         st.rerun()
-    st.write("Здесь будет создание нового бюджета.")
+    budget_period=st.data_input(
+        "Выберите период бюджета",
+        value=(),
+        format="DD.MM.YYYY",
+        key="budget_period"
+    )
+    st.write("Полученное значение:",budget_period)
     st.stop()
         
 #стр истории
