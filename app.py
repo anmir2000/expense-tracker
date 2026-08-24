@@ -568,7 +568,6 @@ if st.session_state.current_page == "budget":
         format="DD.MM.YYYY",
         key="budget_period"
     )
-    st.write("Полученное значение:",budget_period)
     st.stop()
         
 #стр истории
