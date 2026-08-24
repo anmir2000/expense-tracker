@@ -1,21 +1,176 @@
-import streamlit as st #нужен для создания интерфейса
+import streamlit as st
 import pandas as pd
-from datetime import date #автоматически получать сегодняшнюю дату
+from datetime import date
 from supabase import create_client, Client
 
+
+# ==========================================
+# Настройка страницы
+# ==========================================
+
+st.set_page_config(
+    page_title="Учёт расходов",
+    page_icon="💰",
+    layout="centered"
+)
+
+
+APP_URL = (
+    "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
+)
+
+
+# ==========================================
+# Подключение к Supabase
+# ==========================================
 
 supabase: Client = create_client(
     st.secrets["supabase"]["url"],
     st.secrets["supabase"]["key"]
 )
-if "user" not in st.session_state:
-    st.session_state.user = None
 
-if "auth_error" not in st.session_state:
+
+# ==========================================
+# Начальные значения session_state
+# ==========================================
+
+session_defaults = {
+    "user_id": None,
+    "user_email": None,
+    "access_token": None,
+    "refresh_token": None,
+    "auth_error": None,
+    "auth_success": None,
+}
+
+for key, default_value in session_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
+
+def clear_auth_messages():
+    """Удаляет старые сообщения входа и регистрации."""
+
     st.session_state.auth_error = None
-
-if "auth_success" not in st.session_state:
     st.session_state.auth_success = None
+
+
+def clear_user_state():
+    """Удаляет данные авторизации пользователя."""
+
+    st.session_state.user_id = None
+    st.session_state.user_email = None
+    st.session_state.access_token = None
+    st.session_state.refresh_token = None
+
+    # Удаляем значения интерфейса предыдущего пользователя
+    widget_keys = [
+        "budget_period_money",
+        "budget_days",
+        "use_savings",
+        "saving_percent",
+        "selected_date",
+    ]
+
+    for key in widget_keys:
+        st.session_state.pop(key, None)
+
+
+def save_auth_session(response):
+    """Сохраняет пользователя и токены после входа."""
+
+    if response.user is None or response.session is None:
+        return False
+
+    st.session_state.user_id = response.user.id
+    st.session_state.user_email = response.user.email
+
+    st.session_state.access_token = (
+        response.session.access_token
+    )
+
+    st.session_state.refresh_token = (
+        response.session.refresh_token
+    )
+
+    return True
+
+
+# ==========================================
+# Восстановление сессии Supabase
+# ==========================================
+
+if (
+    st.session_state.access_token
+    and st.session_state.refresh_token
+):
+    try:
+        session_response = supabase.auth.set_session(
+            st.session_state.access_token,
+            st.session_state.refresh_token
+        )
+
+        # Supabase мог обновить токены
+        if session_response.session is not None:
+            st.session_state.access_token = (
+                session_response.session.access_token
+            )
+
+            st.session_state.refresh_token = (
+                session_response.session.refresh_token
+            )
+
+        user_response = supabase.auth.get_user()
+
+        if user_response.user is not None:
+            st.session_state.user_id = (
+                user_response.user.id
+            )
+
+            st.session_state.user_email = (
+                user_response.user.email
+            )
+
+    except Exception:
+        clear_user_state()
+
+
+# ==========================================
+# Обработка понятных сообщений об ошибках
+# ==========================================
+
+def get_readable_auth_error(error):
+    error_text = str(error)
+    error_lower = error_text.lower()
+
+    if "email rate limit exceeded" in error_lower:
+        return (
+            "Превышен лимит отправки писем. "
+            "Попробуйте позже."
+        )
+
+    if "email not confirmed" in error_lower:
+        return (
+            "Почта ещё не подтверждена. "
+            "Проверьте письмо от Supabase."
+        )
+
+    if "invalid login credentials" in error_lower:
+        return "Неверный email или пароль."
+
+    if "user already registered" in error_lower:
+        return "Пользователь с таким email уже зарегистрирован."
+
+    if "password should be at least" in error_lower:
+        return "Пароль слишком короткий."
+
+    return error_text
+
+
+# ==========================================
+# Вход и регистрация
+# ==========================================
+
 def show_authentication():
     st.title("Учёт расходов")
 
@@ -23,17 +178,31 @@ def show_authentication():
         "Выберите действие",
         ["Вход", "Регистрация"],
         horizontal=True,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="auth_mode",
+        on_change=clear_auth_messages
     )
+
+    # --------------------------------------
+    # Вход
+    # --------------------------------------
 
     if auth_mode == "Вход":
         st.subheader("Вход")
 
-        with st.form("login_form"):
-            email = st.text_input("Email")
-            password = st.text_input(
+        with st.form(
+            "login_form",
+            clear_on_submit=False
+        ):
+            login_email = st.text_input(
+                "Email",
+                key="login_email"
+            )
+
+            login_password = st.text_input(
                 "Пароль",
-                type="password"
+                type="password",
+                key="login_password"
             )
 
             login_button = st.form_submit_button(
@@ -42,34 +211,54 @@ def show_authentication():
             )
 
         if login_button:
-            if not email or not password:
-                st.error("Заполните email и пароль")
+            clear_auth_messages()
+
+            if not login_email or not login_password:
+                st.session_state.auth_error = (
+                    "Заполните email и пароль."
+                )
 
             else:
                 try:
-                    response = supabase.auth.sign_in_with_password(
-                        {
-                            "email": email,
-                            "password": password
-                        }
+                    response = (
+                        supabase.auth.sign_in_with_password(
+                            {
+                                "email": login_email,
+                                "password": login_password,
+                            }
+                        )
                     )
 
-                    st.session_state.user = response.user
-                    st.rerun()
+                    if save_auth_session(response):
+                        st.rerun()
+
+                    else:
+                        st.session_state.auth_error = (
+                            "Не удалось создать сессию."
+                        )
 
                 except Exception as error:
-                    st.error(f"Ошибка входа: {error}")
+                    st.session_state.auth_error = (
+                        get_readable_auth_error(error)
+                    )
+
+    # --------------------------------------
+    # Регистрация
+    # --------------------------------------
 
     else:
         st.subheader("Регистрация")
 
-        with st.form("register_form"):
-            email = st.text_input(
+        with st.form(
+            "register_form",
+            clear_on_submit=False
+        ):
+            register_email = st.text_input(
                 "Email",
                 key="register_email"
             )
 
-            password = st.text_input(
+            register_password = st.text_input(
                 "Пароль",
                 type="password",
                 key="register_password"
@@ -77,7 +266,8 @@ def show_authentication():
 
             repeat_password = st.text_input(
                 "Повторите пароль",
-                type="password"
+                type="password",
+                key="repeat_password"
             )
 
             register_button = st.form_submit_button(
@@ -91,240 +281,563 @@ def show_authentication():
             )
 
         if register_button:
-            if not email or not password or not repeat_password:
-                st.error("Заполните все поля")
-    
-            elif password != repeat_password:
-                st.error("Пароли не совпадают")
-    
-            elif len(password) < 6:
-                st.error(
-                    "Пароль должен содержать минимум 6 символов"
+            clear_auth_messages()
+
+            if (
+                not register_email
+                or not register_password
+                or not repeat_password
+            ):
+                st.session_state.auth_error = (
+                    "Заполните все поля."
                 )
-    
+
+            elif register_password != repeat_password:
+                st.session_state.auth_error = (
+                    "Пароли не совпадают."
+                )
+
+            elif len(register_password) < 6:
+                st.session_state.auth_error = (
+                    "Пароль должен содержать минимум 6 символов."
+                )
+
             else:
                 try:
-                    supabase.auth.sign_up(
+                    response = supabase.auth.sign_up(
                         {
-                            "email": email,
-                            "password": password,
+                            "email": register_email,
+                            "password": register_password,
                             "options": {
-                                "email_redirect_to":
-                                "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
-                            }
+                                "email_redirect_to": APP_URL
+                            },
                         }
                     )
-    
-                    st.success(
-                        "Аккаунт создан. Проверьте почту."
-                    )
-    
+
+                    # Если подтверждение email выключено,
+                    # Supabase сразу возвращает сессию
+                    if save_auth_session(response):
+                        st.rerun()
+
+                    else:
+                        st.session_state.auth_success = (
+                            "Аккаунт создан. "
+                            "Проверьте письмо для подтверждения почты."
+                        )
+
                 except Exception as error:
-                    st.error(
-                        f"Ошибка регистрации: {error}"
+                    st.session_state.auth_error = (
+                        get_readable_auth_error(error)
                     )
-    
+
         if resend_button:
-            if not email:
-                st.error("Введите email")
-    
+            clear_auth_messages()
+
+            if not register_email:
+                st.session_state.auth_error = (
+                    "Введите email."
+                )
+
             else:
                 try:
                     supabase.auth.resend(
                         {
                             "type": "signup",
-                            "email": email,
+                            "email": register_email,
                             "options": {
-                                "email_redirect_to":
-                                "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
-                            }
+                                "email_redirect_to": APP_URL
+                            },
                         }
                     )
-    
-                    st.success(
-                        "Новое письмо подтверждения отправлено"
+
+                    st.session_state.auth_success = (
+                        "Новое письмо подтверждения отправлено."
                     )
-    
+
                 except Exception as error:
-                    st.error(
-                        f"Ошибка отправки письма: {error}"
+                    st.session_state.auth_error = (
+                        get_readable_auth_error(error)
                     )
-if st.session_state.user is None:
+
+    # --------------------------------------
+    # Сообщения
+    # --------------------------------------
+
+    if st.session_state.auth_error:
+        st.error(st.session_state.auth_error)
+
+    if st.session_state.auth_success:
+        st.success(st.session_state.auth_success)
+
+
+# Пока пользователь не вошёл,
+# код приложения ниже не выполняется
+if st.session_state.user_id is None:
     show_authentication()
     st.stop()
+
+
+# ==========================================
+# Боковая панель и выход
+# ==========================================
+
 st.sidebar.write(
-    f"Вы вошли как: {st.session_state.user.email}"
+    f"Вы вошли как:\n\n{st.session_state.user_email}"
 )
 
-#Настройка страницы
-st.set_page_config( #Это настройки вкладки браузера
-    page_title="Учёт расходов",#Название вкладки.
-    page_icon="💰"#Иконка вкладки.
-)
+if st.sidebar.button(
+    "Выйти",
+    use_container_width=True
+):
+    try:
+        supabase.auth.sign_out()
+
+    except Exception:
+        pass
+
+    clear_user_state()
+    clear_auth_messages()
+    st.rerun()
+
+
+# ==========================================
+# Функции работы с базой данных
+# ==========================================
+
+def load_budget(user_id):
+    """Загружает бюджет пользователя."""
+
+    response = (
+        supabase
+        .table("budgets")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+
+    if response.data:
+        return response.data[0]
+
+    return None
+
+
+def save_budget(
+    user_id,
+    period_money,
+    days,
+    saving_percent
+):
+    """Создаёт или обновляет бюджет пользователя."""
+
+    savings = period_money * saving_percent / 100
+
+    money_for_expenses = (
+        period_money - savings
+    )
+
+    daily_limit = (
+        money_for_expenses / days
+    )
+
+    budget_data = {
+        "user_id": user_id,
+        "period_money": period_money,
+        "days": days,
+        "saving_percent": saving_percent,
+        "savings": savings,
+        "money_for_expenses": money_for_expenses,
+        "daily_limit": daily_limit,
+    }
+
+    (
+        supabase
+        .table("budgets")
+        .upsert(budget_data)
+        .execute()
+    )
+
+    return budget_data
+
+
+def add_expense_to_database(
+    user_id,
+    expense_date,
+    name,
+    amount
+):
+    """Добавляет трату в Supabase."""
+
+    expense_data = {
+        "user_id": user_id,
+        "expense_date": str(expense_date),
+        "name": name.strip(),
+        "amount": amount,
+    }
+
+    (
+        supabase
+        .table("expenses")
+        .insert(expense_data)
+        .execute()
+    )
+
+
+def load_expenses(user_id):
+    """Загружает траты пользователя."""
+
+    response = (
+        supabase
+        .table("expenses")
+        .select(
+            "id, expense_date, name, amount, created_at"
+        )
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return response.data or []
+
+
+# ==========================================
+# Основное приложение
+# ==========================================
 
 st.title("Учёт расходов")
 
-
-# Создаём хранилище расходов
-if "expenses" not in st.session_state:#Если в хранилище ещё нет переменной expenses
-    st.session_state.expenses = []#Тогда создаём её
+user_id = st.session_state.user_id
 
 
-# Проверяем, был ли уже рассчитан бюджет
-if "budget_ready" not in st.session_state:
-    st.session_state.budget_ready = False
+# ==========================================
+# Загрузка бюджета
+# ==========================================
+
+try:
+    budget = load_budget(user_id)
+
+except Exception as error:
+    st.error(
+        f"Не удалось загрузить бюджет: {error}"
+    )
+
+    if st.button("Повторить загрузку"):
+        st.rerun()
+
+    st.stop()
 
 
-def calculate_daily_limit(period_money, days, saving_percent):
-    savings = period_money * saving_percent / 100
-    money_for_expenses = period_money - savings
-    daily_limit = money_for_expenses / days
-
-    return savings, money_for_expenses, daily_limit
-
+# ==========================================
+# Настройка бюджета
+# ==========================================
 
 st.header("1. Настройка бюджета")
+
+if budget is None:
+    default_period_money = 0.0
+    default_days = 30
+    default_saving_percent = 0.0
+
+else:
+    default_period_money = float(
+        budget["period_money"]
+    )
+
+    default_days = int(
+        budget["days"]
+    )
+
+    default_saving_percent = float(
+        budget["saving_percent"]
+    )
 
 
 period_money = st.number_input(
     "Количество денег на период",
     min_value=0.0,
-    step=100.0
+    value=default_period_money,
+    step=100.0,
+    key="budget_period_money"
 )
 
 days = st.number_input(
     "Количество дней",
     min_value=1,
-    step=1
+    value=default_days,
+    step=1,
+    key="budget_days"
 )
 
-use_savings = st.checkbox("Отложить часть денег на сбережения")
+use_savings = st.checkbox(
+    "Отложить часть денег на сбережения",
+    value=default_saving_percent > 0,
+    key="use_savings"
+)
 
 saving_percent = st.number_input(
     "Процент сбережений",
     min_value=0.0,
     max_value=100.0,
-    value=0.0,
+    value=default_saving_percent,
     step=1.0,
-    disabled=not use_savings
+    disabled=not use_savings,
+    key="saving_percent"
 )
 
-calculate_button = st.button("Рассчитать бюджет")
+save_budget_button = st.button(
+    "Сохранить бюджет",
+    use_container_width=True
+)
 
 
-if calculate_button:
-    if not use_savings:
-        saving_percent = 0
+if save_budget_button:
+    if period_money <= 0:
+        st.error(
+            "Количество денег должно быть больше нуля."
+        )
 
-    savings, money_for_expenses, daily_limit = calculate_daily_limit(
-        period_money,
-        days,
-        saving_percent
+    else:
+        if not use_savings:
+            saving_percent = 0.0
+
+        try:
+            budget = save_budget(
+                user_id=user_id,
+                period_money=float(period_money),
+                days=int(days),
+                saving_percent=float(saving_percent)
+            )
+
+            st.success("Бюджет сохранён.")
+
+        except Exception as error:
+            st.error(
+                f"Не удалось сохранить бюджет: {error}"
+            )
+
+
+# ==========================================
+# Бюджет рассчитан
+# ==========================================
+
+if budget is not None:
+    savings = float(budget["savings"])
+
+    money_for_expenses = float(
+        budget["money_for_expenses"]
     )
 
-    st.session_state.savings = savings
-    st.session_state.money_for_expenses = money_for_expenses
-    st.session_state.daily_limit = daily_limit
-    st.session_state.budget_ready = True
+    daily_limit = float(
+        budget["daily_limit"]
+    )
 
-
-if st.session_state.budget_ready:
     st.subheader("Ваш бюджет")
 
     column1, column2, column3 = st.columns(3)
 
     column1.metric(
         "Сбережения",
-        round(st.session_state.savings, 2)
+        f"{savings:.2f}"
     )
 
     column2.metric(
         "На расходы",
-        round(st.session_state.money_for_expenses, 2)
+        f"{money_for_expenses:.2f}"
     )
 
     column3.metric(
         "Лимит в день",
-        round(st.session_state.daily_limit, 2)
+        f"{daily_limit:.2f}"
     )
+
+    st.divider()
+
+
+    # ======================================
+    # Добавление траты
+    # ======================================
 
     st.header("2. Добавление траты")
 
-    with st.form("expense_form", clear_on_submit=True):
+    with st.form(
+        "expense_form",
+        clear_on_submit=True
+    ):
         expense_date = st.date_input(
             "Дата траты",
             value=date.today()
         )
 
-        name = st.text_input("Название траты")
+        expense_name = st.text_input(
+            "Название траты"
+        )
 
-        amount = st.number_input(
+        expense_amount = st.number_input(
             "Сумма",
             min_value=0.0,
             step=0.1
         )
 
-        add_button = st.form_submit_button("Добавить трату")
+        add_expense_button = (
+            st.form_submit_button(
+                "Добавить трату",
+                use_container_width=True
+            )
+        )
 
-    if add_button:
-        if name == "":
-            st.error("Введите название траты")
+    if add_expense_button:
+        if not expense_name.strip():
+            st.error("Введите название траты.")
 
-        elif amount <= 0:
-            st.error("Сумма должна быть больше нуля")
+        elif expense_amount <= 0:
+            st.error(
+                "Сумма должна быть больше нуля."
+            )
 
         else:
-            expense = {
-                "date": str(expense_date),
-                "name": name,
-                "amount": amount
-            }
+            try:
+                add_expense_to_database(
+                    user_id=user_id,
+                    expense_date=expense_date,
+                    name=expense_name,
+                    amount=float(expense_amount)
+                )
 
-            st.session_state.expenses.append(expense)
-            st.success("Трата добавлена")
+                st.success("Трата добавлена.")
+
+            except Exception as error:
+                st.error(
+                    f"Не удалось сохранить трату: {error}"
+                )
 
 
-    # Выбираем день для просмотра расходов
+    # ======================================
+    # Загрузка расходов
+    # ======================================
+
+    try:
+        expenses = load_expenses(user_id)
+
+    except Exception as error:
+        st.error(
+            f"Не удалось загрузить расходы: {error}"
+        )
+
+        expenses = []
+
+
+    # ======================================
+    # Результат за выбранный день
+    # ======================================
+
+    st.header("3. Результат за день")
+
     selected_date = st.date_input(
-        "Посмотреть расходы за день",
+        "Выберите день",
         value=date.today(),
         key="selected_date"
     )
 
-    day_total = 0
+    day_total = 0.0
 
-    for expense in st.session_state.expenses:
-        if expense["date"] == str(selected_date):
-            day_total += expense["amount"]
+    for expense in expenses:
+        if expense["expense_date"] == str(selected_date):
+            day_total += float(expense["amount"])
 
-    remaining = st.session_state.daily_limit - day_total
+    remaining = daily_limit - day_total
 
-    st.header("3. Результат за день")
 
-    st.metric(
-        "Потрачено",
-        round(day_total, 2)
+    result_column1, result_column2 = st.columns(2)
+
+    result_column1.metric(
+        "Потрачено за день",
+        f"{day_total:.2f}"
     )
 
     if remaining >= 0:
-        st.success(
-            f"Вы вписываетесь в бюджет. "
-            f"Можно потратить ещё: {round(remaining, 2)}"
-        )
-    else:
-        st.error(
-            f"Дневной бюджет превышен на: "
-            f"{round(abs(remaining), 2)}"
+        result_column2.metric(
+            "Можно потратить ещё",
+            f"{remaining:.2f}"
         )
 
-    if st.session_state.expenses:
+        st.success("Вы вписываетесь в дневной бюджет.")
+
+    else:
+        result_column2.metric(
+            "Превышение бюджета",
+            f"{abs(remaining):.2f}"
+        )
+
+        st.error("Дневной бюджет превышен.")
+
+
+    # ======================================
+    # Общая статистика
+    # ======================================
+
+    period_total = sum(
+        float(expense["amount"])
+        for expense in expenses
+    )
+
+    period_remaining = (
+        money_for_expenses - period_total
+    )
+
+    st.subheader("Общий результат")
+
+    total_column1, total_column2 = st.columns(2)
+
+    total_column1.metric(
+        "Потрачено всего",
+        f"{period_total:.2f}"
+    )
+
+    total_column2.metric(
+        "Осталось на период",
+        f"{period_remaining:.2f}"
+    )
+
+
+    # ======================================
+    # Таблица расходов
+    # ======================================
+
+    if expenses:
         st.header("Все траты")
 
-        expenses_table = pd.DataFrame(
-            st.session_state.expenses
+        expenses_table = pd.DataFrame(expenses)
+
+        expenses_table["amount"] = pd.to_numeric(
+            expenses_table["amount"]
+        ).round(2)
+
+        expenses_table = expenses_table[
+            [
+                "expense_date",
+                "name",
+                "amount",
+            ]
+        ]
+
+        expenses_table = expenses_table.rename(
+            columns={
+                "expense_date": "Дата",
+                "name": "Название",
+                "amount": "Сумма",
+            }
         )
 
         st.dataframe(
             expenses_table,
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
+
+    else:
+        st.info("Расходов пока нет.")
+
+else:
+    st.info(
+        "Сначала настройте и сохраните бюджет."
+    )
