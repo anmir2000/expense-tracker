@@ -86,65 +86,65 @@ def show_authentication():
                 use_container_width=True
             )
 
-    if register_button:
-        if not email or not password or not repeat_password:
-            st.error("Заполните все поля")
-
-        elif password != repeat_password:
-            st.error("Пароли не совпадают")
-
-        elif len(password) < 6:
-            st.error(
-                "Пароль должен содержать минимум 6 символов"
-            )
-
-        else:
-            try:
-                supabase.auth.sign_up(
-                    {
-                        "email": email,
-                        "password": password,
-                        "options": {
-                            "email_redirect_to":
-                            "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
-                        }
-                    }
-                )
-
-                st.success(
-                    "Аккаунт создан. Проверьте почту."
-                )
-
-            except Exception as error:
+        if register_button:
+            if not email or not password or not repeat_password:
+                st.error("Заполните все поля")
+    
+            elif password != repeat_password:
+                st.error("Пароли не совпадают")
+    
+            elif len(password) < 6:
                 st.error(
-                    f"Ошибка регистрации: {error}"
+                    "Пароль должен содержать минимум 6 символов"
                 )
-
-    if resend_button:
-        if not email:
-            st.error("Введите email")
-
-        else:
-            try:
-                supabase.auth.resend(
-                    {
-                        "type": "signup",
-                        "email": email,
-                        "options": {
-                            "email_redirect_to":
-                            "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
+    
+            else:
+                try:
+                    supabase.auth.sign_up(
+                        {
+                            "email": email,
+                            "password": password,
+                            "options": {
+                                "email_redirect_to":
+                                "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
+                            }
                         }
-                    }
-                )
-
-                st.success(
-                    "Новое письмо подтверждения отправлено"
-                )
-
-            except Exception as error:
-                st.error(
-                    f"Ошибка отправки письма: {error}"
-                )
+                    )
+    
+                    st.success(
+                        "Аккаунт создан. Проверьте почту."
+                    )
+    
+                except Exception as error:
+                    st.error(
+                        f"Ошибка регистрации: {error}"
+                    )
+    
+        if resend_button:
+            if not email:
+                st.error("Введите email")
+    
+            else:
+                try:
+                    supabase.auth.resend(
+                        {
+                            "type": "signup",
+                            "email": email,
+                            "options": {
+                                "email_redirect_to":
+                                "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
+                            }
+                        }
+                    )
+    
+                    st.success(
+                        "Новое письмо подтверждения отправлено"
+                    )
+    
+                except Exception as error:
+                    st.error(
+                        f"Ошибка отправки письма: {error}"
+                    )
 if st.session_state.user is None:
     show_authentication()
     st.stop()
