@@ -535,7 +535,17 @@ def load_expenses(user_id):
     )
 
     return response.data or []
-
+def load_expenses_for_day(user_id, selected_date):
+    response=(
+        supabase
+        .table("expenses")
+        .select("id,expense_date,name,amount")
+        .eq("user_id",user_id)
+        .eq("expense_date",str(selected_date))
+        .execute()
+    )
+    return response.data or[]
+    
 
 # ==========================================
 # Основное приложение
