@@ -562,7 +562,7 @@ if st.session_state.current_page == "budget":
     if st.button("Вернуться на главную"):
         st.session_state.current_page="main"
         st.rerun()
-    budget_period=st.data_input(
+    budget_period=st.date_input(
         "Выберите период бюджета",
         value=(),
         format="DD.MM.YYYY",
