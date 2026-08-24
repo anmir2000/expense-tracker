@@ -415,6 +415,7 @@ if st.sidebar.button(
     use_container_width=True
 ):
     st.session_state.current_page="history"
+    st.rerun()
     
 if st.sidebar.button(
     "Выйти",
@@ -432,14 +433,8 @@ if st.sidebar.button(
         pass
     clear_user_state()
     clear_auth_messages()
+    st.session_state.current_page = "main"
     st.rerun()
-#==========
-#Временно добавляю
-st.write(
-    "текущая страница:",
-    st.session_state.current_page
-)
-#==========
 
 # ==========================================
 # Функции работы с базой данных
@@ -546,6 +541,17 @@ def load_expenses(user_id):
 # Основное приложение
 # ==========================================
 
+# Страница истории
+if st.session_state.current_page == "history":
+    st.title("История расходов")
+
+    if st.button("Вернуться на главную"):
+        st.session_state.current_page = "main"
+        st.rerun()
+
+    st.write("Здесь позже будет календарь.")
+
+    st.stop()
 st.title("Учёт расходов")
 
 user_id = st.session_state.user_id
