@@ -411,6 +411,12 @@ st.sidebar.write(
     f"Вы вошли как:\n\n{st.session_state.user_email}"
 )
 if st.sidebar.button(
+    "Настройка бюджета",
+    use_container_width=True
+):
+    st.session_state.current_page="budget"
+    st.rerun()
+if st.sidebar.button(
     "История",
     use_container_width=True
 ):
@@ -547,11 +553,19 @@ def load_expenses_for_day(user_id, selected_date):
     return response.data or[]
     
 
-# ==========================================
+# =====================
 # Основное приложение
-# ==========================================
-
-# Страница истории
+# =====================
+#стр бюджета
+if st.session_state.current_page == "budget":
+    st.title("Настройка бюджета")
+    if st.button("Вернуться на главную"):
+        st.session_state.current_page="main"
+        st.rerun()
+    st.write("Здесь будет создание нового бюджета.")
+    st.stop()
+        
+#стр истории
 if st.session_state.current_page == "history":
     st.title("История расходов")
 
