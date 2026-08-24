@@ -61,30 +61,30 @@ def show_authentication():
 
         with st.form("register_form"):
             email = st.text_input(
-            "Email",
-            key="register_email"
-        )
+                "Email",
+                key="register_email"
+            )
 
             password = st.text_input(
-            "Пароль",
-            type="password",
-            key="register_password"
-        )
+                "Пароль",
+                type="password",
+                key="register_password"
+            )
 
             repeat_password = st.text_input(
-            "Повторите пароль",
-            type="password"
-        )
+                "Повторите пароль",
+                type="password"
+            )
 
             register_button = st.form_submit_button(
-            "Создать аккаунт",
-            use_container_width=True
-        )
+                "Создать аккаунт",
+                use_container_width=True
+            )
 
             resend_button = st.form_submit_button(
-            "Отправить письмо повторно",
-            use_container_width=True
-        )
+                "Отправить письмо повторно",
+                use_container_width=True
+            )
 
     if register_button:
         if not email or not password or not repeat_password:
