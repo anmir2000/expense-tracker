@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from supabase import create_client, Client
-
+from streamlit_cookies_manager_ext import EncryptedCookieManager
 
 # ==========================================
 # Настройка страницы
@@ -13,11 +13,16 @@ st.set_page_config(
     page_icon="💰",
     layout="centered"
 )
-
-
 APP_URL = (
     "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
 )
+cookies = EncryptedCookieManager(
+    prefix="expense_tracker/",
+    password=st.secrets["cookies"]["password"]
+)
+
+if not cookies.ready():
+    st.stop()
 
 
 # ==========================================
@@ -92,6 +97,10 @@ def save_auth_session(response):
     st.session_state.refresh_token = (
         response.session.refresh_token
     )
+    cookies["refresh_token"] = (
+        response.session.refresh_token
+    )
+    cookies.save()
 
     return True
 
@@ -99,7 +108,23 @@ def save_auth_session(response):
 # ==========================================
 # Восстановление сессии Supabase
 # ==========================================
+if st.session_state.user_id is None:
+    saved_refresh_token = cookies.get("refresh_token")
 
+    if saved_refresh_token:
+        try:
+            response = supabase.auth.refresh_session(
+                saved_refresh_token
+            )
+
+            save_auth_session(response)
+
+        except Exception:
+            try:
+                del cookies["refresh_token"]
+                cookies.save()
+            except KeyError:
+                pass
 if (
     st.session_state.access_token
     and st.session_state.refresh_token
@@ -394,7 +419,11 @@ if st.sidebar.button(
 
     except Exception:
         pass
-
+    try:
+        del cookies["refresh_token"]
+        cookies.save()
+    except KeyError:
+        pass
     clear_user_state()
     clear_auth_messages()
     st.rerun()
