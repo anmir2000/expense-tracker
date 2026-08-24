@@ -61,65 +61,91 @@ def show_authentication():
 
         with st.form("register_form"):
             email = st.text_input(
-                "Email",
-                key="register_email"
-            )
+            "Email",
+            key="register_email"
+        )
 
             password = st.text_input(
-                "Пароль",
-                type="password",
-                key="register_password"
-            )
+            "Пароль",
+            type="password",
+            key="register_password"
+        )
 
             repeat_password = st.text_input(
-                "Повторите пароль",
-                type="password"
-            )
+            "Повторите пароль",
+            type="password"
+        )
 
             register_button = st.form_submit_button(
-                "Создать аккаунт",
-                use_container_width=True
+            "Создать аккаунт",
+            use_container_width=True
+        )
+
+            resend_button = st.form_submit_button(
+            "Отправить письмо повторно",
+            use_container_width=True
+        )
+
+    if register_button:
+        if not email or not password or not repeat_password:
+            st.error("Заполните все поля")
+
+        elif password != repeat_password:
+            st.error("Пароли не совпадают")
+
+        elif len(password) < 6:
+            st.error(
+                "Пароль должен содержать минимум 6 символов"
             )
 
-        if register_button:
-            if not email or not password:
-                st.error("Заполните все поля")
-
-            elif password != repeat_password:
-                st.error("Пароли не совпадают")
-
-            elif len(password) < 6:
-                st.error("Пароль должен содержать минимум 6 символов")
-
-            else:
-                try:
-                    supabase.auth.sign_up(
-                        {
-                            "email": email,
-                            "password": password
+        else:
+            try:
+                supabase.auth.sign_up(
+                    {
+                        "email": email,
+                        "password": password,
+                        "options": {
+                            "email_redirect_to":
+                            "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
                         }
-                    )
+                    }
+                )
 
-                    st.success(
-                        "Аккаунт создан. Теперь выберите «Вход»."
-                    )
+                st.success(
+                    "Аккаунт создан. Проверьте почту."
+                )
 
-                except Exception as error:
-                    st.error(f"Ошибка регистрации: {error}")
+            except Exception as error:
+                st.error(
+                    f"Ошибка регистрации: {error}"
+                )
 
-if st.session_state.user is None:
-    show_authentication()
-    st.stop()
+    if resend_button:
+        if not email:
+            st.error("Введите email")
 
-st.sidebar.write(
-    f"Вы вошли как: {st.session_state.user.email}"
-)
+        else:
+            try:
+                supabase.auth.resend(
+                    {
+                        "type": "signup",
+                        "email": email,
+                        "options": {
+                            "email_redirect_to":
+                            "https://expense-tracker-8eujmioxux8vqcfwiuddwq.streamlit.app/"
+                        }
+                    }
+                )
 
-if st.sidebar.button("Выйти"):
-    supabase.auth.sign_out()
-    st.session_state.user = None
-    st.rerun()
-    
+                st.success(
+                    "Новое письмо подтверждения отправлено"
+                )
+
+            except Exception as error:
+                st.error(
+                    f"Ошибка отправки письма: {error}"
+                )
+
 #Настройка страницы
 st.set_page_config( #Это настройки вкладки браузера
     page_title="Учёт расходов",#Название вкладки.
