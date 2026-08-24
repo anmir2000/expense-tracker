@@ -523,6 +523,7 @@ def load_expenses(user_id):
         )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
+        .limit(50)
         .execute()
     )
 
