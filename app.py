@@ -11,7 +11,11 @@ supabase: Client = create_client(
 if "user" not in st.session_state:
     st.session_state.user = None
 
+if "auth_error" not in st.session_state:
+    st.session_state.auth_error = None
 
+if "auth_success" not in st.session_state:
+    st.session_state.auth_success = None
 def show_authentication():
     st.title("Учёт расходов")
 
